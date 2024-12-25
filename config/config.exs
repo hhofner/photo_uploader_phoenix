@@ -61,6 +61,17 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Configure ExAws for Cloudflare R2
+config :ex_aws,
+  json_codec: Jason,
+  access_key_id: {:system, "R2_ACCESS_KEY_ID"},
+  secret_access_key: {:system, "R2_SECRET_ACCESS_KEY"}
+
+config :ex_aws, :s3,
+  scheme: "https://",
+  host: {:system, "R2_HOST"},
+  region: "auto"
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

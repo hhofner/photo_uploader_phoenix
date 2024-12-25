@@ -1,23 +1,70 @@
 defmodule PhotoUploaderPhoenix.Storage do
   @moduledoc """
-  Handles file storage operations with Cloudflare R2 (dummy implementation for now)
+  Handles file storage operations with Cloudflare R2
   """
 
+  require Logger
+
   def upload(path, filename, description) do
-    # Dummy implementation - will be replaced with actual R2 upload
-    # For now, we'll still save locally but prepare the interface
-    dest = Path.join(["priv", "static", "uploads", filename])
-    File.cp!(path, dest)
+    bucket = System.get_env("R2_BUCKET_NAME")
+
+    # Upload the image file
+    image_result = ExAws.S3.put_object(bucket, filename, File.read!(path))
+    |> ExAws.request()
+
+    # Create and upload metadata JSON
+    metadata = %{
+      filename: filename,
+      description: description,
+      uploaded_at: DateTime.utc_now() |> DateTime.to_iso8601()
+    }
     
-    # Create uploads directory if it doesn't exist
-    File.mkdir_p!(Path.dirname(dest))
-    
-    # Return a URL that works with our static file serving
-    {:ok, %{url: "/uploads/#{filename}", description: description}}
+    metadata_filename = "#{Path.rootname(filename)}.json"
+    metadata_result = ExAws.S3.put_object(
+      bucket,
+      "metadata/#{metadata_filename}",
+      Jason.encode!(metadata)
+    )
+    |> ExAws.request()
+
+    case {image_result, metadata_result} do
+      {{:ok, _}, {:ok, _}} ->
+        host = System.get_env("R2_HOST")
+        url = "https://#{host}/#{bucket}/#{filename}"
+        {:ok, %{url: url, description: description}}
+      
+      {image_err, metadata_err} ->
+        Logger.error("Failed to upload - Image: #{inspect(image_err)}, Metadata: #{inspect(metadata_err)}")
+        {:error, "Failed to upload file"}
+    end
   end
 
   def delete(filename) do
-    # Dummy implementation - will be replaced with actual R2 delete
-    {:ok, filename}
+    bucket = System.get_env("R2_BUCKET_NAME")
+    
+    # Delete both the image and its metadata
+    metadata_filename = "#{Path.rootname(filename)}.json"
+    
+    with {:ok, _} <- ExAws.S3.delete_object(bucket, filename) |> ExAws.request(),
+         {:ok, _} <- ExAws.S3.delete_object(bucket, "metadata/#{metadata_filename}") |> ExAws.request() do
+      {:ok, filename}
+    else
+      error ->
+        Logger.error("Failed to delete file: #{inspect(error)}")
+        {:error, "Failed to delete file"}
+    end
+  end
+
+  def get_metadata(filename) do
+    bucket = System.get_env("R2_BUCKET_NAME")
+    metadata_filename = "metadata/#{Path.rootname(filename)}.json"
+    
+    case ExAws.S3.get_object(bucket, metadata_filename) |> ExAws.request() do
+      {:ok, %{body: body}} -> 
+        Jason.decode(body)
+      error ->
+        Logger.error("Failed to get metadata: #{inspect(error)}")
+        {:error, "Failed to get metadata"}
+    end
   end
 end
