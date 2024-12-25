@@ -14,8 +14,21 @@ defmodule PhotoUploaderPhoenixWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :auth do
+    plug :browser
+    plug PhotoUploaderPhoenixWeb.AuthPlug
+  end
+
   scope "/", PhotoUploaderPhoenixWeb do
     pipe_through :browser
+    
+    get "/login", LoginController, :index
+    post "/session", SessionController, :create
+    delete "/session", SessionController, :delete
+  end
+
+  scope "/", PhotoUploaderPhoenixWeb do
+    pipe_through [:auth]
 
     live "/uploads", UploadLive, :index
     get "/", UploadController, :redirect_to_uploads
