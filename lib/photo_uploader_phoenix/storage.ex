@@ -8,30 +8,52 @@ defmodule PhotoUploaderPhoenix.Storage do
   def upload(path, filename, description) do
     bucket = System.get_env("R2_BUCKET_NAME")
 
-    # Upload the image file
-    image_result = ExAws.S3.put_object(bucket, filename, File.read!(path))
+    # Generate a UUID-based filename to avoid collisions
+    unique_filename = "#{UUID.uuid4()}_#{filename}"
+    
+    # Set content-type based on file extension
+    content_type = get_content_type(filename)
+    
+    # Upload the image file with content-type and public-read ACL
+    image_result = ExAws.S3.put_object(
+      bucket,
+      unique_filename,
+      File.read!(path),
+      content_type: content_type,
+      acl: "public-read"
+    )
     |> ExAws.request()
 
     # Create and upload metadata JSON
     metadata = %{
-      filename: filename,
+      original_filename: filename,
+      stored_filename: unique_filename,
       description: description,
+      content_type: content_type,
       uploaded_at: DateTime.utc_now() |> DateTime.to_iso8601()
     }
     
-    metadata_filename = "#{Path.rootname(filename)}.json"
+    metadata_filename = "#{Path.rootname(unique_filename)}.json"
     metadata_result = ExAws.S3.put_object(
       bucket,
       "metadata/#{metadata_filename}",
-      Jason.encode!(metadata)
+      Jason.encode!(metadata),
+      content_type: "application/json",
+      acl: "public-read"
     )
     |> ExAws.request()
 
     case {image_result, metadata_result} do
       {{:ok, _}, {:ok, _}} ->
         host = System.get_env("R2_HOST")
-        url = "https://#{host}/#{bucket}/#{filename}"
-        {:ok, %{url: url, description: description}}
+        url = "https://#{host}/#{bucket}/#{unique_filename}"
+        metadata_url = "https://#{host}/#{bucket}/metadata/#{metadata_filename}"
+        {:ok, %{
+          url: url,
+          metadata_url: metadata_url,
+          filename: unique_filename,
+          description: description
+        }}
       
       {image_err, metadata_err} ->
         Logger.error("Failed to upload - Image: #{inspect(image_err)}, Metadata: #{inspect(metadata_err)}")
@@ -65,6 +87,18 @@ defmodule PhotoUploaderPhoenix.Storage do
       error ->
         Logger.error("Failed to get metadata: #{inspect(error)}")
         {:error, "Failed to get metadata"}
+    end
+  end
+
+  # Helper function to determine content-type based on file extension
+  defp get_content_type(filename) do
+    case Path.extname(filename) |> String.downcase() do
+      ".jpg" -> "image/jpeg"
+      ".jpeg" -> "image/jpeg"
+      ".png" -> "image/png"
+      ".gif" -> "image/gif"
+      ".webp" -> "image/webp"
+      _ -> "application/octet-stream"
     end
   end
 end
