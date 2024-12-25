@@ -1,5 +1,7 @@
 defmodule PhotoUploaderPhoenixWeb.UploadLive do
   use PhotoUploaderPhoenixWeb, :live_view
+  
+  alias PhotoUploaderPhoenix.Storage
 
   @impl true
   def mount(_params, _session, socket) do
@@ -20,10 +22,9 @@ defmodule PhotoUploaderPhoenixWeb.UploadLive do
   @impl true
   def handle_event("save", _params, socket) do
     uploaded_files =
-      consume_uploaded_entries(socket, :images, fn %{path: path}, _entry ->
-        dest = Path.join(["priv", "static", "uploads", Path.basename(path)])
-        File.cp!(path, dest)
-        {:ok, "/uploads/" <> Path.basename(dest)}
+      consume_uploaded_entries(socket, :images, fn %{path: path}, entry ->
+        filename = entry.client_name
+        Storage.upload(path, filename)
       end)
 
     {:noreply, update(socket, :uploaded_files, &(&1 ++ uploaded_files))}
