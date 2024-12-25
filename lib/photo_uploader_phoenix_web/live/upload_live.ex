@@ -17,7 +17,12 @@ defmodule PhotoUploaderPhoenixWeb.UploadLive do
 
   @impl true
   def handle_event("validate", _params, socket) do
-    {:noreply, socket}
+    {:noreply, socket |> validate_uploads(:images)}
+  end
+
+  @impl true
+  def handle_event("cancel-upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :images, ref)}
   end
 
   def handle_event("update-description", %{"ref" => ref, "description" => description}, socket) do
