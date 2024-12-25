@@ -17,8 +17,8 @@ defmodule PhotoUploaderPhoenixWeb.Router do
   scope "/", PhotoUploaderPhoenixWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
     live "/uploads", UploadLive, :index
+    get "/", UploadController, :redirect_to_uploads
   end
 
   # Other scopes may use custom stacks.
