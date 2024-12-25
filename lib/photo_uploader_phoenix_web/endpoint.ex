@@ -23,7 +23,13 @@ defmodule PhotoUploaderPhoenixWeb.Endpoint do
     at: "/",
     from: :photo_uploader_phoenix,
     gzip: false,
-    only: PhotoUploaderPhoenixWeb.static_paths()
+    only: PhotoUploaderPhoenixWeb.static_paths(),
+    headers: [{"access-control-allow-origin", "*"}]
+
+  plug Plug.Static,
+    at: "/uploads",
+    from: "priv/static/uploads",
+    gzip: false
 
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.

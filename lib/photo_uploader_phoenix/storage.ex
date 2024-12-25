@@ -9,7 +9,10 @@ defmodule PhotoUploaderPhoenix.Storage do
     dest = Path.join(["priv", "static", "uploads", filename])
     File.cp!(path, dest)
     
-    # Return a dummy URL that matches what we'd expect from R2
+    # Create uploads directory if it doesn't exist
+    File.mkdir_p!(Path.dirname(dest))
+    
+    # Return a URL that works with our static file serving
     {:ok, %{url: "/uploads/#{filename}", description: description}}
   end
 
