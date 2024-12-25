@@ -8,6 +8,7 @@ defmodule PhotoUploaderPhoenixWeb.UploadLive do
     {:ok,
      socket
      |> assign(:uploaded_files, [])
+     |> assign(:descriptions, %{})
      |> allow_upload(:images, 
        accept: ~w(.jpg .jpeg .png),
        max_entries: 10,
@@ -19,15 +20,23 @@ defmodule PhotoUploaderPhoenixWeb.UploadLive do
     {:noreply, socket}
   end
 
+  def handle_event("update-description", %{"ref" => ref, "description" => description}, socket) do
+    {:noreply, update(socket, :descriptions, &Map.put(&1, ref, description))}
+  end
+
   @impl true
   def handle_event("save", _params, socket) do
     uploaded_files =
       consume_uploaded_entries(socket, :images, fn %{path: path}, entry ->
         filename = entry.client_name
-        Storage.upload(path, filename)
+        description = Map.get(socket.assigns.descriptions, entry.ref, "")
+        Storage.upload(path, filename, description)
       end)
 
-    {:noreply, update(socket, :uploaded_files, &(&1 ++ uploaded_files))}
+    {:noreply, 
+     socket 
+     |> update(:uploaded_files, &(&1 ++ uploaded_files))
+     |> assign(:descriptions, %{})}
   end
 
   @impl true
@@ -54,6 +63,12 @@ defmodule PhotoUploaderPhoenixWeb.UploadLive do
                 <div class="text-xs text-gray-500">
                   <%= entry.progress %>%
                 </div>
+                <input type="text" 
+                       placeholder="Add description..."
+                       class="mt-1 w-full text-sm border rounded p-1"
+                       value={@descriptions[entry.ref]}
+                       phx-blur="update-description"
+                       phx-value-ref={entry.ref} />
                 <%= for err <- upload_errors(@uploads.images, entry) do %>
                   <div class="text-red-500 text-xs"><%= err %></div>
                 <% end %>
@@ -75,8 +90,13 @@ defmodule PhotoUploaderPhoenixWeb.UploadLive do
       <div class="mt-8">
         <h2 class="text-xl font-bold mb-4">Uploaded Photos</h2>
         <div class="grid grid-cols-2 gap-4">
-          <%= for url <- @uploaded_files do %>
-            <img src={url} class="w-full h-40 object-cover rounded-lg" />
+          <%= for %{url: url, description: description} <- @uploaded_files do %>
+            <div class="space-y-1">
+              <img src={url} class="w-full h-40 object-cover rounded-lg" />
+              <%= if description && description != "" do %>
+                <p class="text-sm text-gray-600"><%= description %></p>
+              <% end %>
+            </div>
           <% end %>
         </div>
       </div>
